@@ -1,0 +1,14 @@
+header {
+    background: #35424a;
+    color: #ffffff;
+    padding: 20px 0;
+    text-align: center;
+}
+
+#foot {
+    text-align: center ;
+    background: #35424a;
+    color: #ffffff;
+    position: absolute;
+    width: 100%;
+}
