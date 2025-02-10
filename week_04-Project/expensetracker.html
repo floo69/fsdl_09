@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expense Tracker</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .container {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            width: 300px;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        form {
+            display: flex;
+            flex-direction: column;
+        }
+
+        input {
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+
+        button {
+            padding: 10px;
+            margin-top: 10px;
+            background-color: #28a745;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #218838;
+        }
+
+        #expense-list {
+            margin-top: 20px;
+        }
+
+        .expense-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        #total-expenses {
+            margin-top: 20px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Expense Tracker</h1>
+        <form id="expense-form">
+            <input type="text" id="expense-name" placeholder="Expense Name" required>
+            <input type="number" id="expense-amount" placeholder="Amount" required>
+            <button type="submit">Add Expense</button>
+        </form>
+        <div id="expense-list"></div>
+        <div id="total-expenses">
+            <h3>Total Expenses: <span id="total-amount">0</span></h3>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('expense-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            // Get input values
+            const expenseName = document.getElementById('expense-name').value;
+            const expenseAmount = parseFloat(document.getElementById('expense-amount').value);
+
+            // Validate input
+            if (!expenseName || isNaN(expenseAmount) || expenseAmount <= 0) {
+                alert('Please enter a valid expense name and amount');
+                return;
+            }
+
+            // Create a new expense element
+            const expenseItem = document.createElement('div');
+            expenseItem.classList.add('expense-item');
+            
+            expenseItem.innerHTML = `
+                <span>${expenseName}</span>
+                <span>$${expenseAmount.toFixed(2)}</span>
+                <button class="delete-btn">X</button>
+            `;
+
+            // Append the expense item to the list
+            document.getElementById('expense-list').appendChild(expenseItem);
+
+            // Add event listener for the delete button
+            expenseItem.querySelector('.delete-btn').addEventListener('click', function() {
+                expenseItem.remove();
+                updateTotal();
+            });
+
+            // Clear input fields
+            document.getElementById('expense-name').value = '';
+            document.getElementById('expense-amount').value = '';
+
+            // Update the total expenses
+            updateTotal();
+        });
+
+        function updateTotal() {
+            const expenses = document.querySelectorAll('.expense-item');
+            let total = 0;
+
+            expenses.forEach(expense => {
+                const amount = parseFloat(expense.querySelectorAll('span')[1].textContent.slice(1));
+                total += amount;
+            });
+
+            document.getElementById('total-amount').textContent = total.toFixed(2);
+        }
+    </script>
+</body>
+</html>
