@@ -1,0 +1,42 @@
+.product-card {
+    transition: transform 0.3s ease-in-out;
+  }
+  
+  .product-card:hover {
+    transform: translateY(-5px);
+  }
+  
+  .product-image {
+    height: 200px;
+    object-fit: cover;
+  }
+  
+  #cart-items {
+    max-height: 300px;
+    overflow-y: auto;
+  }
+  
+  .quantity-control {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .quantity-btn {
+    background-color: #f8f9fa;
+    border: 1px solid #ced4da;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    border-radius: 0.2rem;
+  }
+  
+  .quantity-input {
+    width: 40px;
+    text-align: center;
+    border: 1px solid #ced4da;
+    border-radius: 0.2rem;
+    margin: 0 0.25rem;
+  }
+  
+  
