@@ -39,4 +39,8 @@
     margin: 0 0.25rem;
   }
   
+  #checkout-page {
+    max-width: 600px;
+    margin: 0 auto;
+  }
   
