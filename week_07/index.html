@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en" ng-app="helloWorldApp">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AngularJS Hello World with Loops & Conditions</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.8.2/angular.min.js"></script>
+  <script src="app.js"></script>
+</head>
+
+<body>
+
+  <div ng-controller="HelloWorldController">
+    <h1>Welcome to AngularJS!</h1>
+
+    <p>Enter your name: <input type="text" ng-model="userName"></p>
+    
+    <p ng-if="userName">Hello, {{ userName }}!</p>
+    <p ng-if="!userName">Please enter your name.</p>
+
+    <p>{{ message }}</p>
+
+    <div ng-if="userName.length > 0 && userName.length <= 5">
+      <p>Your name is short and sweet!</p>
+    </div>
+
+    <h3>List of Friends:</h3>
+    <ul>
+      <li ng-repeat="friend in friends">{{ friend }}</li>
+    </ul>
+
+    <button ng-click="addFriend()">Add a New Friend</button>
+
+    <div ng-if="friends.length === 0">
+      <p>No friends yet! Add some!</p>
+    </div>
+    <div ng-if="friends.length > 0">
+      <p>You have {{ friends.length }} friends!</p>
+    </div>
+  </div>
+
+</body>
+
+</html>
