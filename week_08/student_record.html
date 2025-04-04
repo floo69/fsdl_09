@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Record App (AngularJS)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.8.2/angular.min.js"></script>
+    <style>
+        /* Basic styles for better presentation */
+        body { font-family: 'Inter', sans-serif; }
+        .container { max-width: 800px; margin: 2rem auto; padding: 1.5rem; }
+        .form-input { @apply w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500; }
+        .btn { @apply px-4 py-2 rounded-md font-medium; }
+        .btn-primary { @apply bg-indigo-600 text-white hover:bg-indigo-700; }
+        .btn-secondary { @apply bg-gray-500 text-white hover:bg-gray-600; }
+        .btn-danger { @apply bg-red-600 text-white hover:bg-red-700; }
+        .table th, .table td { @apply px-4 py-2 border border-gray-300 text-left; }
+        .table th { @apply bg-gray-100 font-semibold; }
+        .error-message { @apply text-red-500 text-sm mt-1; }
+        .form-section { @apply mb-6 p-4 border border-gray-200 rounded-lg shadow-sm; }
+        .table-section { @apply mt-8; }
+        h1, h2 { @apply text-xl font-semibold mb-4 text-gray-800; }
+    </style>
+</head>
+<body ng-app="studentRecordApp" ng-controller="StudentController" class="bg-gray-50">
+
+    <div class="container bg-white shadow-md rounded-lg">
+        <h1 class="text-2xl font-bold text-center text-indigo-700 mb-6">Student Record Management</h1>
+
+        <div class="form-section">
+            <h2>{{ editMode ? 'Edit Student' : 'Add New Student' }}</h2>
+            <form name="studentForm" ng-submit="saveStudent()" novalidate>
+                <div class="mb-4">
+                    <label for="name" class="block text-sm font-medium text-gray-700 mb-1">Name:</label>
+                    <input type="text" id="name" name="name" class="form-input" ng-model="currentStudent.name" required>
+                    <div ng-show="studentForm.name.$touched && studentForm.name.$invalid" class="error-message">
+                        <span ng-show="studentForm.name.$error.required">Name is required.</span>
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <label for="rollNo" class="block text-sm font-medium text-gray-700 mb-1">Roll Number:</label>
+                    <input type="number" id="rollNo" name="rollNo" class="form-input" ng-model="currentStudent.rollNo" required ng-pattern="/^[0-9]+$/">
+                     <div ng-show="studentForm.rollNo.$touched && studentForm.rollNo.$invalid" class="error-message">
+                        <span ng-show="studentForm.rollNo.$error.required">Roll Number is required.</span>
+                        <span ng-show="studentForm.rollNo.$error.pattern || studentForm.rollNo.$error.number">Please enter a valid positive integer.</span>
+                    </div>
+                     <div ng-show="!editMode && isRollNoDuplicate(currentStudent.rollNo)" class="error-message">
+                        Roll Number already exists.
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <label for="grade" class="block text-sm font-medium text-gray-700 mb-1">Grade:</label>
+                    <input type="text" id="grade" name="grade" class="form-input" ng-model="currentStudent.grade" required>
+                     <div ng-show="studentForm.grade.$touched && studentForm.grade.$invalid" class="error-message">
+                        <span ng-show="studentForm.grade.$error.required">Grade is required.</span>
+                    </div>
+                </div>
+                <div class="flex space-x-2">
+                    <button type="submit" class="btn btn-primary" ng-disabled="studentForm.$invalid || (!editMode && isRollNoDuplicate(currentStudent.rollNo))">
+                        {{ editMode ? 'Update Student' : 'Add Student' }}
+                    </button>
+                    <button type="button" class="btn btn-secondary" ng-click="cancelEdit()" ng-show="editMode">
+                        Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <div class="table-section">
+            <h2>Student List</h2>
+            <div ng-show="students.length === 0" class="text-gray-500 italic">No students added yet.</div>
+            <table class="table w-full border-collapse mt-4" ng-show="students.length > 0">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Roll Number</th>
+                        <th>Grade</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr ng-repeat="student in students track by student.rollNo">
+                        <td>{{ student.name }}</td>
+                        <td>{{ student.rollNo }}</td>
+                        <td>{{ student.grade }}</td>
+                        <td class="space-x-1">
+                            <button class="btn btn-sm btn-secondary text-xs" ng-click="editStudent(student)">Edit</button>
+                            <button class="btn btn-sm btn-danger text-xs" ng-click="deleteStudent(student.rollNo)">Delete</button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // Define the AngularJS module
+        var app = angular.module('studentRecordApp', []);
+
+        // Define the controller
+        app.controller('StudentController', function($scope) {
+            // --- Scope Variables ---
+            $scope.students = []; // Array to hold student records
+            $scope.currentStudent = {}; // Object to hold data from the form
+            $scope.editMode = false; // Flag to indicate if we are editing or adding
+            $scope.originalRollNo = null; // To store the roll number when editing
+
+            // --- Initialization ---
+            // Load students from local storage if available (optional persistence)
+            function loadStudents() {
+                const storedStudents = localStorage.getItem('angularJsStudents');
+                if (storedStudents) {
+                    $scope.students = JSON.parse(storedStudents);
+                }
+            }
+
+            // Save students to local storage (optional persistence)
+            function saveStudentsToStorage() {
+                localStorage.setItem('angularJsStudents', JSON.stringify($scope.students));
+            }
+
+            // --- Core Functions ---
+
+            // Function to add or update a student
+            $scope.saveStudent = function() {
+                if ($scope.studentForm.$invalid) {
+                    // Touch all fields to show validation errors if form is invalid on submit
+                    angular.forEach($scope.studentForm.$error, function (field) {
+                        angular.forEach(field, function(errorField){
+                           errorField.$setTouched();
+                        });
+                    });
+                    return; // Don't proceed if form is invalid
+                }
+
+                 // Check for duplicate roll number only when adding
+                if (!$scope.editMode && $scope.isRollNoDuplicate($scope.currentStudent.rollNo)) {
+                    return; // Don't add if roll number exists
+                }
+
+                if ($scope.editMode) {
+                    // --- Update existing student ---
+                    // Find the index of the student being edited
+                    const index = $scope.students.findIndex(s => s.rollNo === $scope.originalRollNo);
+                    if (index !== -1) {
+                        // Check if the new roll number conflicts with another existing student
+                        if ($scope.currentStudent.rollNo !== $scope.originalRollNo && $scope.isRollNoDuplicate($scope.currentStudent.rollNo)) {
+                             alert('Cannot update: The new Roll Number ' + $scope.currentStudent.rollNo + ' already exists for another student.');
+                             return;
+                        }
+                         // Update the student record
+                        $scope.students[index] = angular.copy($scope.currentStudent);
+                    }
+                    $scope.editMode = false; // Exit edit mode
+                    $scope.originalRollNo = null; // Clear original roll number
+                } else {
+                    // --- Add new student ---
+                    // Add a copy of the currentStudent to the students array
+                    $scope.students.push(angular.copy($scope.currentStudent));
+                }
+
+                // Reset the form
+                $scope.resetForm();
+                saveStudentsToStorage(); // Save changes
+            };
+
+            // Function to prepare the form for editing a student
+            $scope.editStudent = function(student) {
+                $scope.editMode = true;
+                // Create a copy to avoid modifying the original object directly in the table
+                $scope.currentStudent = angular.copy(student);
+                $scope.originalRollNo = student.rollNo; // Store the original roll number
+                 // Reset form validation state for editing
+                $scope.studentForm.$setPristine();
+                $scope.studentForm.$setUntouched();
+            };
+
+            // Function to delete a student
+            $scope.deleteStudent = function(rollNo) {
+                // Confirm deletion
+                if (confirm('Are you sure you want to delete student with Roll No: ' + rollNo + '?')) {
+                    // Find the index of the student to delete
+                    const index = $scope.students.findIndex(s => s.rollNo === rollNo);
+                    if (index !== -1) {
+                        // Remove the student from the array
+                        $scope.students.splice(index, 1);
+                        saveStudentsToStorage(); // Save changes
+                         // If the deleted student was being edited, cancel edit mode
+                        if ($scope.editMode && $scope.originalRollNo === rollNo) {
+                           $scope.cancelEdit();
+                        }
+                    }
+                }
+            };
+
+            // Function to cancel the edit operation
+            $scope.cancelEdit = function() {
+                $scope.editMode = false;
+                $scope.originalRollNo = null;
+                $scope.resetForm();
+            };
+
+            // Function to reset the form fields and validation state
+            $scope.resetForm = function() {
+                $scope.currentStudent = {}; // Clear the form model
+                $scope.studentForm.$setPristine(); // Reset form pristine state
+                $scope.studentForm.$setUntouched(); // Reset form touched state
+            };
+
+             // Function to check if a roll number already exists
+            $scope.isRollNoDuplicate = function(rollNo) {
+                 if (!rollNo) return false; // Don't check if rollNo is empty/undefined
+                 // If editing, allow the original roll number
+                 if ($scope.editMode && rollNo === $scope.originalRollNo) {
+                     return false;
+                 }
+                 // Check against all other students
+                 return $scope.students.some(student => student.rollNo === rollNo);
+            };
+
+            // --- Initial Load ---
+            loadStudents(); // Load students when the controller initializes
+        });
+    </script>
+
+</body>
+</html>

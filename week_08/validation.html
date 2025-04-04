@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AngularJS Validation Example</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.8.2/angular.min.js"></script>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        input[type="text"], input[type="email"], input[type="number"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box; /* Include padding and border in element's total width and height */
+        }
+        /* Style for invalid inputs */
+        input.ng-invalid.ng-touched {
+            border-color: red;
+            background-color: #fff0f0;
+        }
+        /* Style for valid inputs */
+        input.ng-valid.ng-touched {
+            border-color: green;
+        }
+        .error-message {
+            color: red;
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        button:hover:not(:disabled) {
+            background-color: #0056b3;
+        }
+        .message-box {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 4px;
+            display: none; /* Hidden by default */
+        }
+        .message-box.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            display: block; /* Show when class is added */
+        }
+        .message-box.error {
+             background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            display: block; /* Show when class is added */
+        }
+    </style>
+</head>
+<body ng-app="validationApp">
+
+    <div ng-controller="MainController">
+
+        <h2>User Registration</h2>
+
+        <form name="userForm" ng-submit="submitForm()" novalidate>
+            <div class="form-group">
+                <label for="nameInput">Name:</label>
+                <input type="text"
+                       id="nameInput"
+                       name="nameInput"
+                       ng-model="user.name"
+                       required
+                       placeholder="Enter your name">
+                <div ng-show="userForm.nameInput.$touched && userForm.nameInput.$error.required" class="error-message">
+                    Name is required.
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="emailInput">Email:</label>
+                <input type="email"
+                       id="emailInput"
+                       name="emailInput"
+                       ng-model="user.email"
+                       required
+                       placeholder="Enter your email">
+                <div ng-show="userForm.emailInput.$touched && userForm.emailInput.$invalid" class="error-message">
+                    <span ng-show="userForm.emailInput.$error.required">Email is required.</span>
+                    <span ng-show="userForm.emailInput.$error.email">Please enter a valid email address.</span>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="ageInput">Age:</label>
+                <input type="number"
+                       id="ageInput"
+                       name="ageInput"
+                       ng-model="user.age"
+                       required
+                       min="18"
+                       max="100"
+                       placeholder="Enter your age (18-100)">
+                 <div ng-show="userForm.ageInput.$touched && userForm.ageInput.$invalid" class="error-message">
+                    <span ng-show="userForm.ageInput.$error.required">Age is required.</span>
+                    <span ng-show="userForm.ageInput.$error.min">Age must be at least 18.</span>
+                    <span ng-show="userForm.ageInput.$error.max">Age cannot be more than 100.</span>
+                    <span ng-show="userForm.ageInput.$error.number">Please enter a valid number.</span>
+                </div>
+            </div>
+
+            <button type="submit" ng-disabled="userForm.$invalid">
+                Register
+            </button>
+
+            <p style="margin-top: 15px;">
+                Form is valid: <strong>{{ userForm.$valid }}</strong> <br>
+                Name input is valid: <strong>{{ userForm.nameInput.$valid }}</strong> <br>
+                Email input is valid: <strong>{{ userForm.emailInput.$valid }}</strong> <br>
+                Age input is valid: <strong>{{ userForm.ageInput.$valid }}</strong>
+            </p>
+
+             <div id="messageBox" class="message-box" ng-class="message.type">
+                {{ message.text }}
+            </div>
+
+        </form>
+    </div>
+
+    <script>
+        // 5. Define the AngularJS module
+        var app = angular.module('validationApp', []);
+
+        // 6. Define the controller
+        app.controller('MainController', function($scope) {
+            // Initialize user object in the scope
+            $scope.user = {};
+            // Initialize message object
+            $scope.message = { text: '', type: '' }; // type can be 'success' or 'error'
+
+            // 7. Define the function to be called on form submission
+            $scope.submitForm = function() {
+                // Check if the form is valid before proceeding
+                // Although ng-disabled prevents submission via button click when invalid,
+                // this check is good practice (e.g., if submission happens via Enter key)
+                if ($scope.userForm.$valid) {
+                    console.log('Form submitted successfully!');
+                    console.log('User data:', $scope.user);
+
+                    // Display success message
+                    $scope.message.text = 'Registration successful for ' + $scope.user.name + '!';
+                    $scope.message.type = 'success'; // Use 'success' class for styling
+
+                    // Optionally, reset the form
+                    // $scope.user = {}; // Clear the model
+                    // $scope.userForm.$setPristine(); // Reset form state to pristine
+                    // $scope.userForm.$setUntouched(); // Reset form state to untouched
+
+                } else {
+                    console.log('Form is invalid. Please check the fields.');
+                     // Display error message (though usually field-specific errors are enough)
+                    $scope.message.text = 'Please correct the errors in the form.';
+                    $scope.message.type = 'error'; // Use 'error' class for styling
+                }
+            };
+        });
+    </script>
+
+</body>
+</html>
