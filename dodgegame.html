@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js Dodge & Shoot Game (with Acceleration)</title>
+    <style>
+        /* Basic styling for the page */
+        body {
+            margin: 0;
+            overflow: hidden; /* Prevent scrollbars */
+            font-family: 'Arial', sans-serif;
+            background-color: #f0f0f0; /* Light gray background */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        /* Style for the canvas where the game is rendered */
+        #gameCanvas {
+            display: block; /* Remove extra space below canvas */
+            background-color: #000; /* Black background for the game area */
+            width: 80%; /* Responsive width */
+            max-width: 800px; /* Max width */
+            aspect-ratio: 16 / 9; /* Maintain aspect ratio */
+            border-radius: 8px; /* Rounded corners */
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2); /* Subtle shadow */
+        }
+
+        /* Styling for game info overlay (score, instructions) */
+        #infoOverlay {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent background */
+            padding: 10px 20px;
+            border-radius: 5px;
+            text-align: center;
+            font-size: 1.2em;
+            z-index: 10; /* Ensure it's above the canvas */
+        }
+
+         /* Styling for the game over message */
+        #gameOverOverlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            background-color: rgba(200, 0, 0, 0.8); /* Reddish background */
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            font-size: 2em;
+            z-index: 20; /* Ensure it's above info overlay */
+            display: none; /* Hidden by default */
+            flex-direction: column; /* Stack elements vertically */
+            align-items: center; /* Center items horizontally */
+        }
+
+        /* Styling for the restart button */
+        #restartButton {
+            margin-top: 20px; /* Space above the button */
+            padding: 10px 20px;
+            font-size: 0.8em; /* Smaller font size relative to game over text */
+            cursor: pointer;
+            background-color: #4CAF50; /* Green background */
+            color: white;
+            border: none;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            transition: background-color 0.3s ease;
+        }
+
+        #restartButton:hover {
+            background-color: #45a049; /* Darker green on hover */
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <div id="infoOverlay">
+        Score: <span id="score">0</span> | Arrows/WASD: Move | Space: Fire
+    </div>
+
+    <div id="gameOverOverlay">
+        Game Over!
+        <button id="restartButton">Restart</button>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        // --- Global Variables ---
+        let scene, camera, renderer;
+        let playerCube;
+        let obstacles = []; // Array to hold falling obstacles
+        let projectiles = []; // Array to hold player projectiles
+        let obstacleSpeed = 0.05; // Initial speed of falling obstacles
+        let projectileSpeed = 0.3; // Speed of projectiles
+        let score = 0;
+        let gameIsOver = false;
+        let lastObstacleSpawnTime = 0;
+        let spawnInterval = 1000; // Spawn an obstacle every 1000ms (1 second)
+        let scoreInterval; // To manage score increment timing
+        let animationFrameId; // To control the animation loop
+        let lastFireTime = 0; // Timestamp of the last projectile fired
+        let fireCooldown = 250; // Cooldown period for firing in milliseconds (4 shots/sec)
+
+        // Player Movement Physics
+        let playerVelocityX = 0;
+        let playerVelocityY = 0;
+        const playerAcceleration = 0.02; // How quickly speed builds up
+        const playerDamping = 0.94;     // How quickly speed falls off (0-1, lower = faster stop)
+        const maxPlayerSpeed = 0.2;     // Maximum speed in either direction
+
+        // Player Movement State Flags
+        let isMovingLeft = false;
+        let isMovingRight = false;
+        let isMovingUp = false;
+        let isMovingDown = false;
+
+        // Game boundaries
+        const gameBoundsX = 10; // Horizontal boundaries
+        const gameBoundsY = { min: -7, max: -5 }; // Vertical boundaries for player
+
+        // --- DOM Elements ---
+        const canvas = document.getElementById('gameCanvas');
+        const scoreElement = document.getElementById('score');
+        const gameOverOverlay = document.getElementById('gameOverOverlay');
+        const restartButton = document.getElementById('restartButton');
+
+        // --- Initialization Function ---
+        function init() {
+            // Scene setup
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x222222); // Dark gray background
+
+            // Camera setup
+            const aspect = canvas.clientWidth / canvas.clientHeight;
+            camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
+            camera.position.z = 15; // Position the camera further back
+            camera.position.y = 5; // Position the camera slightly higher
+            camera.lookAt(0, 0, 0); // Make camera look towards the center of the action
+
+            // Renderer setup
+            renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+            renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+            renderer.setPixelRatio(window.devicePixelRatio); // Adjust for high-DPI screens
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); // Soft white light
+            scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8); // White directional light
+            directionalLight.position.set(5, 10, 7.5);
+            scene.add(directionalLight);
+
+            // Player Cube Setup
+            const playerGeometry = new THREE.BoxGeometry(1, 1, 1); // Width, height, depth
+            const playerMaterial = new THREE.MeshStandardMaterial({ color: 0x00ff00 }); // Green color
+            playerCube = new THREE.Mesh(playerGeometry, playerMaterial);
+            playerCube.position.y = (gameBoundsY.min + gameBoundsY.max) / 2; // Start player in middle of vertical bounds
+            scene.add(playerCube);
+
+            // Reset game state
+            resetGame();
+
+            // Event Listeners
+            window.addEventListener('keydown', handleKeyDown);
+            window.addEventListener('keyup', handleKeyUp); // Add listener for key release
+            window.addEventListener('resize', onWindowResize); // Handle window resizing
+            restartButton.addEventListener('click', restartGame);
+
+            // Start the animation loop
+            animate();
+            // Start score interval
+            scoreInterval = setInterval(updateScore, 100); // Update score every 100ms
+        }
+
+        // --- Reset Game State ---
+        function resetGame() {
+            // Reset score and game over flag
+            score = 0;
+            scoreElement.innerText = score;
+            gameIsOver = false;
+            gameOverOverlay.style.display = 'none'; // Hide game over message
+            obstacleSpeed = 0.05; // Reset obstacle speed
+            spawnInterval = 1000; // Reset spawn interval
+            lastObstacleSpawnTime = Date.now(); // Reset spawn timer
+            lastFireTime = 0; // Reset fire timer
+
+            // Reset movement state
+            isMovingLeft = false;
+            isMovingRight = false;
+            isMovingUp = false;
+            isMovingDown = false;
+            playerVelocityX = 0;
+            playerVelocityY = 0;
+
+            // Clear existing obstacles from the scene and array
+            obstacles.forEach(obstacle => scene.remove(obstacle));
+            obstacles = [];
+
+            // Clear existing projectiles from the scene and array
+            projectiles.forEach(projectile => scene.remove(projectile));
+            projectiles = [];
+
+            // Reset player position
+            playerCube.position.set(0, (gameBoundsY.min + gameBoundsY.max) / 2, 0);
+
+            // Ensure player cube is visible
+            if (!scene.children.includes(playerCube)) {
+                scene.add(playerCube);
+            }
+        }
+
+        // --- Restart Game Function ---
+        function restartGame() {
+            resetGame();
+
+            // Restart score interval if it was cleared
+            if (scoreInterval === null) { // Check if interval was actually cleared
+                 scoreInterval = setInterval(updateScore, 100);
+            }
+
+            // Restart animation loop if it was stopped
+            if (!animationFrameId) {
+                animate();
+            }
+        }
+
+
+        // --- Handle Window Resize ---
+        function onWindowResize() {
+            // Update camera aspect ratio and renderer size
+            const aspect = canvas.clientWidth / canvas.clientHeight;
+            camera.aspect = aspect;
+            camera.updateProjectionMatrix();
+            renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+        }
+
+        // --- Keyboard Down Controls (Set Flags) ---
+        function handleKeyDown(event) {
+            if (gameIsOver) return; // Ignore input if game is over
+
+            switch(event.key) {
+                case 'ArrowLeft':
+                case 'a':
+                    isMovingLeft = true;
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                    isMovingRight = true;
+                    break;
+                case 'ArrowUp':
+                case 'w':
+                    isMovingUp = true;
+                    break;
+                case 'ArrowDown':
+                case 's':
+                    isMovingDown = true;
+                    break;
+                case ' ': // Spacebar
+                    fireProjectile();
+                    break;
+            }
+        }
+
+        // --- Keyboard Up Controls (Unset Flags) ---
+        function handleKeyUp(event) {
+            // No need to check gameIsOver here, releasing keys is always fine
+             switch(event.key) {
+                case 'ArrowLeft':
+                case 'a':
+                    isMovingLeft = false;
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                    isMovingRight = false;
+                    break;
+                case 'ArrowUp':
+                case 'w':
+                    isMovingUp = false;
+                    break;
+                case 'ArrowDown':
+                case 's':
+                    isMovingDown = false;
+                    break;
+            }
+        }
+
+
+        // --- Fire Projectile ---
+        function fireProjectile() {
+            const now = Date.now();
+            // Check if cooldown has passed
+            if (now - lastFireTime < fireCooldown) {
+                return; // Exit if still in cooldown
+            }
+            lastFireTime = now; // Update last fire time
+
+            // Create projectile geometry and material
+            const projectileGeometry = new THREE.CylinderGeometry(0.1, 0.1, 0.8, 8);
+            const projectileMaterial = new THREE.MeshStandardMaterial({ color: 0xffff00 }); // Yellow
+            const projectile = new THREE.Mesh(projectileGeometry, projectileMaterial);
+
+            // Position projectile slightly above the player cube
+            projectile.position.copy(playerCube.position);
+            projectile.position.y += 0.6;
+            projectile.rotation.x = Math.PI / 2; // Orient cylinder
+
+            scene.add(projectile);
+            projectiles.push(projectile);
+        }
+
+        // --- Spawn Obstacles ---
+        function spawnObstacle() {
+            const obstacleGeometry = new THREE.BoxGeometry(1, 1, 1);
+            const obstacleMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 }); // Red
+            const obstacle = new THREE.Mesh(obstacleGeometry, obstacleMaterial);
+
+            // Random horizontal position within bounds
+            obstacle.position.x = (Math.random() - 0.5) * (gameBoundsX * 2);
+            obstacle.position.y = 12; // Start further above the screen
+            obstacle.position.z = 0;
+
+            scene.add(obstacle);
+            obstacles.push(obstacle);
+
+            // Gradually increase difficulty
+            obstacleSpeed += 0.0005;
+            spawnInterval = Math.max(200, spawnInterval * 0.995);
+        }
+
+        // --- Update Player Movement (Called from animate) ---
+        function updatePlayerMovement() {
+             // Apply acceleration based on flags
+            if (isMovingLeft) {
+                playerVelocityX -= playerAcceleration;
+            }
+            if (isMovingRight) {
+                playerVelocityX += playerAcceleration;
+            }
+            if (isMovingUp) {
+                playerVelocityY += playerAcceleration;
+            }
+            if (isMovingDown) {
+                playerVelocityY -= playerAcceleration;
+            }
+
+            // Apply damping (friction) if no key is pressed in that direction
+            if (!isMovingLeft && !isMovingRight) {
+                playerVelocityX *= playerDamping;
+            }
+             if (!isMovingUp && !isMovingDown) {
+                playerVelocityY *= playerDamping;
+            }
+
+            // Clamp velocity to max speed
+            playerVelocityX = Math.max(-maxPlayerSpeed, Math.min(maxPlayerSpeed, playerVelocityX));
+            playerVelocityY = Math.max(-maxPlayerSpeed, Math.min(maxPlayerSpeed, playerVelocityY));
+
+            // Stop tiny movements (optional threshold)
+            if (Math.abs(playerVelocityX) < 0.001) playerVelocityX = 0;
+            if (Math.abs(playerVelocityY) < 0.001) playerVelocityY = 0;
+
+
+            // Update position based on velocity
+            playerCube.position.x += playerVelocityX;
+            playerCube.position.y += playerVelocityY;
+
+            // Enforce boundaries
+            if (playerCube.position.x < -gameBoundsX) {
+                playerCube.position.x = -gameBoundsX;
+                playerVelocityX = 0; // Stop movement at boundary
+            } else if (playerCube.position.x > gameBoundsX) {
+                playerCube.position.x = gameBoundsX;
+                playerVelocityX = 0; // Stop movement at boundary
+            }
+
+            if (playerCube.position.y < gameBoundsY.min) {
+                playerCube.position.y = gameBoundsY.min;
+                playerVelocityY = 0; // Stop movement at boundary
+            } else if (playerCube.position.y > gameBoundsY.max) {
+                playerCube.position.y = gameBoundsY.max;
+                playerVelocityY = 0; // Stop movement at boundary
+            }
+        }
+
+
+        // --- Collision Detection ---
+        function checkCollisions() {
+            // 1. Player vs Obstacles
+            const playerBox = new THREE.Box3().setFromObject(playerCube);
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const obstacle = obstacles[i];
+                // Ensure obstacle mesh is valid before getting bounding box
+                 if (!obstacle || !obstacle.geometry) continue;
+                const obstacleBox = new THREE.Box3().setFromObject(obstacle);
+                if (playerBox.intersectsBox(obstacleBox)) {
+                    gameOver();
+                    return; // Exit early if game over
+                }
+            }
+
+            // 2. Projectiles vs Obstacles
+            for (let i = projectiles.length - 1; i >= 0; i--) {
+                const projectile = projectiles[i];
+                 // Ensure projectile mesh is valid
+                if (!projectile || !projectile.geometry) continue;
+                const projectileBox = new THREE.Box3().setFromObject(projectile);
+
+                for (let j = obstacles.length - 1; j >= 0; j--) {
+                    const obstacle = obstacles[j];
+                     // Ensure obstacle mesh is valid
+                    if (!obstacle || !obstacle.geometry) continue;
+                    const obstacleBox = new THREE.Box3().setFromObject(obstacle);
+
+                    if (projectileBox.intersectsBox(obstacleBox)) {
+                        // Collision detected! Remove both projectile and obstacle
+                        scene.remove(projectile);
+                        projectiles.splice(i, 1);
+
+                        scene.remove(obstacle);
+                        obstacles.splice(j, 1);
+
+                        score += 10; // Add points for hitting an obstacle
+                        scoreElement.innerText = score;
+
+                        // Break inner loop since projectile is gone
+                        break;
+                    }
+                }
+            }
+        }
+
+        // --- Game Over Function ---
+        function gameOver() {
+            gameIsOver = true;
+            gameOverOverlay.style.display = 'flex'; // Show game over message
+            clearInterval(scoreInterval); // Stop updating score
+            scoreInterval = null; // Mark interval as cleared
+            cancelAnimationFrame(animationFrameId); // Stop the animation loop
+            animationFrameId = null; // Clear the animation frame ID
+        }
+
+        // --- Update Score ---
+        function updateScore() {
+            if (!gameIsOver) {
+                score++; // Increment score slightly over time
+                scoreElement.innerText = score;
+            }
+        }
+
+        // --- Animation Loop ---
+        function animate() {
+            // Request the next frame
+            animationFrameId = requestAnimationFrame(animate);
+
+            // Don't run game logic if paused or over
+            if (gameIsOver) return;
+
+            const now = Date.now();
+
+            // Spawn new obstacles based on interval
+            if (now - lastObstacleSpawnTime > spawnInterval) {
+                spawnObstacle();
+                lastObstacleSpawnTime = now;
+            }
+
+            // Update player movement based on velocity/acceleration/damping
+            updatePlayerMovement();
+
+            // Update obstacle positions and remove off-screen ones
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const obstacle = obstacles[i];
+                if (!obstacle) continue; // Skip if obstacle was removed mid-loop
+                obstacle.position.y -= obstacleSpeed; // Move obstacle down
+
+                // Remove obstacle if it goes below the screen
+                if (obstacle.position.y < -10) {
+                    scene.remove(obstacle);
+                    obstacles.splice(i, 1);
+                }
+            }
+
+            // Update projectile positions and remove off-screen ones
+            for (let i = projectiles.length - 1; i >= 0; i--) {
+                const projectile = projectiles[i];
+                 if (!projectile) continue; // Skip if projectile was removed mid-loop
+                projectile.position.y += projectileSpeed; // Move projectile up
+
+                // Remove projectile if it goes above the screen
+                if (projectile.position.y > 12) { // Check against upper boundary
+                    scene.remove(projectile);
+                    projectiles.splice(i, 1);
+                }
+            }
+
+
+            // Check for collisions (player-obstacle and projectile-obstacle)
+            checkCollisions();
+
+            // Render the scene
+            renderer.render(scene, camera);
+        }
+
+        // --- Start the game ---
+        // Ensure Three.js setup runs after the DOM is fully loaded
+        window.onload = function() {
+            init(); // Initialize the game
+        }
+
+    </script>
+</body>
+</html>
